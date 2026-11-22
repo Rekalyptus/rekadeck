@@ -4,8 +4,9 @@ Rekadeck is a small e-paper flashcard device for [Rekalyptus](https://rekalyptus
 due, you grade each one with four keys, and it syncs your reviews over Wi-Fi. It works offline too: reviews wait on
 the device until it can reach the server again.
 
-This repository has everything you need to make one: the firmware, an installer for Windows, macOS and Linux, a
-desktop simulator, a mock server to develop against, and the protocol the device speaks.
+This repository has everything you need to make one: a parts list, a 3D-printable case with its CAD files, an
+assembly guide, the firmware, an installer for Windows, macOS and Linux, a desktop simulator, a mock server to develop
+against, and the protocol the device speaks.
 
 ## What you need
 
@@ -18,7 +19,8 @@ desktop simulator, a mock server to develop against, and the protocol the device
 | LiPo battery with a 2-pin JST-PH plug | Optional. The board charges it over USB-C |
 | USB-C cable that carries data | Some cables only charge |
 
-How to wire it: [docs/HARDWARE.md](docs/HARDWARE.md).
+To build the whole device, see [hardware/](hardware/): the full parts list with links, the case to 3D print, and the
+assembly guide. Pin-by-pin wiring: [docs/HARDWARE.md](docs/HARDWARE.md).
 
 ## Install the firmware
 
@@ -97,6 +99,7 @@ the simulator, the mock server, building the firmware with PlatformIO, the tests
 
 ```
 flash.sh, flash.bat     the installers (flash.bat runs tools/flash.ps1)
+hardware/               parts list, assembly guide, the case to 3D print (STL) and its CAD files (STEP)
 firmware/               the ESP32-S3 firmware (PlatformIO). firmware/prebuilt/ is what the installers write
 firmware/lib/rekacore/  the device itself: review loop, sync, sleep, setup, screens. Plain C++17, no Arduino
 firmware/src/           the board layer: panel, Wi-Fi, flash, deep sleep, battery gauge
@@ -110,7 +113,8 @@ docs/                   hardware and developer notes
 
 ## License
 
-MIT, see [LICENSE](LICENSE). These third-party parts keep their own licenses:
+MIT, see [LICENSE](LICENSE). That includes the case, its CAD files and the guides in `hardware/`. These third-party
+parts keep their own licenses:
 
 | Part | Where | License |
 |---|---|---|

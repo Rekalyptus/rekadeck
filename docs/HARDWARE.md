@@ -1,5 +1,8 @@
 # Rekadeck hardware
 
+The electronics in detail. To build the whole device, with the case, the full parts list and the step-by-step
+assembly guide, start at [hardware/](../hardware/).
+
 ## Parts
 
 | Part | Notes |

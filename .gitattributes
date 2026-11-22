@@ -7,5 +7,11 @@
 # Firmware images and fonts are bytes, never line-ending converted
 *.bin  binary
 *.ttf  binary
+
+# The case: 3D models and PDFs stay exactly as exported (STEP is text, but CAD programs get it byte for byte)
+*.stl  binary
+*.step -text
+*.stp  -text
+*.pdf  binary
 firmware/prebuilt/SHA256SUMS  text eol=lf
 firmware/prebuilt/VERSION     text eol=lf
