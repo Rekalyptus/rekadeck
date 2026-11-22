@@ -26,7 +26,7 @@ esptool_sha256() {
 }
 
 ESP_USB_VENDOR="303a"   # Espressif: the ESP32-S3's own USB port, which is how the Rekadeck's board connects
-WAIT_S=300              # how long to wait for the board to show up
+WAIT_S="${REKADECK_WAIT_S:-300}"   # how long to wait for the board to show up (the CI tests shorten it)
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FW="$HERE/firmware/prebuilt"

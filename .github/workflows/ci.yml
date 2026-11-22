@@ -130,6 +130,7 @@ jobs:
           cat out.txt
           grep -q "isn't there" out.txt
 
+      # started from PowerShell 7, like a user in Windows Terminal (flash.bat has to reset the module path for this)
       - name: flash.bat with a port that isn't there
         if: runner.os == 'Windows'
         shell: pwsh
@@ -138,3 +139,36 @@ jobs:
           Write-Host $out
           if ($LASTEXITCODE -ne 1 -or $out -notmatch "isn't there") { exit 1 }
           exit 0
+
+      # the real board search (ioreg on macOS, sysfs on Linux, CIM on Windows) with no board plugged in.
+      # --erase only keeps flash.bat from pausing at the end: with no board there's nothing to erase.
+      - name: flash.sh searches for a board and finds none
+        if: runner.os != 'Windows'
+        env:
+          REKADECK_WAIT_S: '25'
+        run: |
+          ./flash.sh > out.txt 2>&1 && exit 1
+          cat out.txt
+          grep -q "no Rekadeck showed up" out.txt
+
+      - name: flash.bat searches for a board and finds none, started from PowerShell 7
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          REKADECK_WAIT_S: '25'
+        run: |
+          $out = & .\flash.bat --erase 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 1 -or $out -notmatch "no Rekadeck showed up") { exit 1 }
+          exit 0
+
+      - name: flash.bat searches for a board and finds none, started from cmd
+        if: runner.os == 'Windows'
+        shell: cmd
+        env:
+          REKADECK_WAIT_S: '25'
+        run: |
+          call flash.bat --erase > out.txt 2>&1
+          if not errorlevel 1 exit /b 1
+          type out.txt
+          findstr /c:"no Rekadeck showed up" out.txt

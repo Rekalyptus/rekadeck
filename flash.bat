@@ -10,6 +10,9 @@ if not exist "%~dp0tools\flash.ps1" (
   if "%~1"=="" pause
   exit /b 1
 )
+rem Started from PowerShell 7, Windows PowerShell inherits PowerShell 7's module folders and can't load some of its
+rem own commands. With this empty it uses its usual folders.
+set "PSModulePath="
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\flash.ps1" %*
 set "code=%errorlevel%"
 rem Started with a double-click (no options): keep the window open so the result can be read

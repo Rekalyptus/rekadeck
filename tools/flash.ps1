@@ -22,6 +22,7 @@ $EsptoolSha256 = 'd48f3f0111cb67c53d5f760fc7f61860abfb5306629aa6d5c2c0cdcb91d54b
 
 $EspUsbVendor = '303A'   # Espressif: the ESP32-S3's own USB port, which is how the Rekadeck's board connects
 $WaitSeconds = 300       # how long to wait for the board to show up
+if ($env:REKADECK_WAIT_S) { $WaitSeconds = [int]$env:REKADECK_WAIT_S }   # the CI tests shorten it
 
 $Root = Split-Path -Parent $PSScriptRoot
 $Fw = Join-Path $Root 'firmware\prebuilt'
@@ -63,7 +64,11 @@ while ($i -lt $args.Count) {
 $Port = $PortGiven
 
 function Get-Sha256([string]$Path) {
-  (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+  # .NET directly rather than Get-FileHash, which lives in a module that doesn't always load (see flash.bat)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $stream = [System.IO.File]::OpenRead($Path)
+  try { -join ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) }
+  finally { $stream.Dispose(); $sha.Dispose() }
 }
 
 # ------------------------------------------------------------------ the firmware in this folder
