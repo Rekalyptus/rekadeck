@@ -1,0 +1,11 @@
+* text=auto
+
+# The installers: bash needs LF even on a Windows checkout, cmd is happiest with CRLF
+*.sh   text eol=lf
+*.bat  text eol=crlf
+
+# Firmware images and fonts are bytes, never line-ending converted
+*.bin  binary
+*.ttf  binary
+firmware/prebuilt/SHA256SUMS  text eol=lf
+firmware/prebuilt/VERSION     text eol=lf

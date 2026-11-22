@@ -1,0 +1,20 @@
+# esptool, downloaded by flash.sh / flash.bat
+.tools/
+
+# builds
+firmware/.pio/
+sim/build/
+tests/core/build/
+build/
+release/
+site/
+
+# the simulator's flash and the mock server's state
+sim_data/
+server/.venv/
+server/rekasim.db
+
+__pycache__/
+.pytest_cache/
+.vscode/
+.DS_Store

@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rekadeck Simulator</title>
+<style>
+:root { --bg:#0d0e10; --fg:#e9e9e7; --soft:#9b9fa7; --faint:#5f636b; --line:#26282d; --accent:#86b98f; --warn:#e0a85c;
+        --slab:#18191c; --key:#2b2c31; --keytop:#34363b; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system, "Inter", "Segoe UI", sans-serif; }
+main { display:grid; grid-template-columns:minmax(0, 1fr) 340px; gap:40px; max-width:1360px; margin:0 auto;
+       padding:28px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left)); }
+@media (max-width: 1000px) { main { grid-template-columns:minmax(0, 1fr); } }
+h1 { font-size:22px; margin:0 0 4px; font-weight:700; }
+h2 { font-size:15px; margin:30px 0 10px; font-weight:650; }
+p { margin:0 0 10px; }
+.soft { color:var(--soft); }
+.device { margin-top:22px; }
+.slab { background:var(--slab); border-radius:22px; padding:clamp(14px, 3vw, 34px) clamp(14px, 3vw, 34px) clamp(22px, 4vw, 52px);
+        box-shadow:0 30px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04); }
+canvas { display:block; width:100%; height:auto; aspect-ratio:800/480; border-radius:6px; background:#e9e7df; image-rendering:auto; }
+.deck { position:relative; height:110px; margin:0 clamp(14px, 3vw, 34px); }
+.key { position:absolute; top:26px; width:64px; height:58px; margin-left:-32px; border-radius:12px; border:0;
+       background:linear-gradient(var(--keytop), var(--key)); box-shadow:0 5px 0 #121316, 0 8px 14px rgba(0,0,0,.4);
+       color:var(--faint); font:600 13px system-ui; cursor:pointer; transition:transform .05s, box-shadow .05s;
+       touch-action:none; user-select:none; }
+.key.down { transform:translateY(4px); box-shadow:0 1px 0 #121316, 0 3px 6px rgba(0,0,0,.4); }
+.chips { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:6px; color:var(--soft); font-size:14px; }
+.chips b { color:var(--fg); font-weight:600; }
+.state { font-size:20px; font-weight:700; }
+.row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:5px 0; }
+.btns { display:flex; flex-wrap:wrap; gap:8px; }
+button.b { background:#1c1e22; color:var(--fg); border:1px solid var(--line); border-radius:9px; padding:7px 12px; font:inherit; cursor:pointer; }
+button.b:hover { border-color:#3a3d44; }
+button.b.go { background:var(--accent); color:#0d0e10; border-color:var(--accent); font-weight:600; }
+input[type=range] { width:150px; accent-color:var(--accent); }
+input[type=number] { width:80px; background:#16181b; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:5px 8px; font:inherit; }
+.switch { position:relative; width:44px; height:24px; border-radius:12px; background:#2b2d33; border:0; cursor:pointer; flex:none; }
+.switch::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#c9cbd0; transition:left .15s; }
+.switch.on { background:var(--accent); } .switch.on::after { left:23px; background:#0d0e10; }
+.log { font:12.5px/1.55 ui-monospace, Menlo, monospace; color:#c4c7cd; max-height:300px; overflow:auto; white-space:pre-wrap; }
+.log div { padding:1px 0; }
+.note { color:var(--warn); }
+a { color:var(--accent); }
+kbd { font:600 12px ui-monospace, Menlo, monospace; background:#1f2125; border-radius:5px; padding:1px 6px; }
+#setup[hidden] { display:none; }
+.panelwrap { position:relative; }
+#changes { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:0; border-radius:6px; background:transparent; }
+.refs { display:flex; flex-direction:column; gap:6px; font-size:14px; }
+.refs div { display:flex; gap:10px; align-items:baseline; }
+.refs .t { flex:none; width:64px; color:var(--fg); font-weight:600; font-variant-numeric:tabular-nums; }
+.refs .m { flex:none; width:58px; }
+.refs .w { color:var(--soft); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.refs .fast .m { color:var(--warn); } .refs .full .m { color:#e07a6a; } .refs .partial .m { color:var(--accent); }
+.big { font-size:15px; } .big b { font-weight:650; }
+</style>
+</head>
+<body>
+<main>
+  <section style="min-width:0">
+    <h1>Rekadeck simulator</h1>
+    <p class="soft">The real device code running against a pretend board. Press keys <kbd>1</kbd> to <kbd>4</kbd> or click them, and hold them like real keys.</p>
+    <div class="device">
+      <div class="slab"><div class="panelwrap"><canvas id="screen" width="800" height="480"></canvas><canvas id="changes" width="800" height="480"></canvas></div></div>
+      <div class="deck" id="deck"></div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <aside>
+    <div class="state" id="state">Connecting...</div>
+    <p class="soft" id="stateSub"></p>
+
+    <div id="setup" hidden>
+      <h2>Wi-Fi setup</h2>
+      <p>The device is broadcasting <b id="apName"></b>. Open its setup page as if you'd joined it from your phone.</p>
+      <p class="soft" id="netHint"></p>
+      <div class="btns"><button class="b go" onclick="window.open('/portal', '_blank')">Open the setup page</button></div>
+    </div>
+
+    <h2>Panel</h2>
+    <p class="big" id="panelSum"></p>
+    <div class="row"><span>Tint what each refresh draws (green) and erases (orange)</span><button class="switch" id="showChanges" onclick="toggleChanges()"></button></div>
+    <div class="refs" id="refs"></div>
+
+    <h2>World</h2>
+    <div class="row"><span>Skip Wi-Fi setup and linking</span><button class="switch" id="skipSetup" onclick="ctl({skip_setup: !S.skip_setup})"></button></div>
+    <div class="row"><span>Wi-Fi router</span><button class="switch" id="router" onclick="ctl({router: !S.router})"></button></div>
+    <div class="row"><span>USB power</span><button class="switch" id="usb" onclick="ctl({usb: !S.usb})"></button></div>
+    <div class="row"><span>Battery <b id="battVal"></b></span><input type="range" id="batt" min="0" max="100" step="1"
+         oninput="battVal.textContent = this.value + '%'" onchange="ctl({battery: +this.value})"></div>
+    <div class="row"><span>Device clock runs fast by</span><span><input type="number" id="drift" step="0.5"
+         onchange="ctl({drift: (+this.value) / 100})"> %</span></div>
+
+    <h2>Time</h2>
+    <p class="soft">Skips move the device's timers, not its clock, so review times stay real.</p>
+    <div class="btns">
+      <button class="b" onclick="ctl({skip_ms: 120000})">Skip 2 minutes</button>
+      <button class="b" onclick="ctl({skip_ms: 3600000})">Skip 1 hour</button>
+      <button class="b" onclick="ctl({wake_now: true})">Fire the wake timer</button>
+    </div>
+
+    <h2>Power</h2>
+    <div class="btns">
+      <button class="b" onclick="ctl({power_cycle: true})">Pull the battery</button>
+      <button class="b" onclick="if (confirm('Erase Wi-Fi, link, cards and reviews on the device?')) ctl({factory_reset: true})">Factory reset</button>
+    </div>
+
+    <h2>Server</h2>
+    <p><a href="http://127.0.0.1:8000" target="_blank">Open the mock server's dashboard</a> to link the device, watch reviews arrive, or review cards "on your phone".</p>
+
+    <h2>Device log</h2>
+    <div class="log" id="log"></div>
+  </aside>
+</main>
+
+<script>
+const PAPER = [233, 231, 223], INK = [26, 26, 28];
+const cv = document.getElementById('screen'), cx = cv.getContext('2d');
+const img = cx.createImageData(800, 480);
+let S = {}, seq = -1, logAfter = 0;
+
+// ---------------------------------------------------------------- keys
+const deck = document.getElementById('deck');
+const keyEls = [1, 2, 3, 4].map(k => {
+  const b = document.createElement('button');
+  b.className = 'key'; b.textContent = k; b.style.left = ((k - 0.5) * 25) + '%';
+  b.setAttribute('aria-label', 'Key ' + k);
+  const down = e => { e.preventDefault(); press(k, true); }, up = () => press(k, false);
+  b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointerleave', up);
+  deck.appendChild(b); return b;
+});
+const held = new Set();
+function press(k, down) {
+  if (down === held.has(k)) return;
+  down ? held.add(k) : held.delete(k);
+  keyEls[k - 1].classList.toggle('down', down);
+  fetch(`/api/key?k=${k}&down=${down ? 1 : 0}`, {method: 'POST'});
+}
+addEventListener('keydown', e => { if (e.repeat || e.target.tagName === 'INPUT') return; const k = +e.key; if (k >= 1 && k <= 4) press(k, true); });
+addEventListener('keyup', e => { const k = +e.key; if (k >= 1 && k <= 4) press(k, false); });
+addEventListener('blur', () => [...held].forEach(k => press(k, false)));
+
+// ---------------------------------------------------------------- the panel
+// A small model of the 7.5" V2 e-paper. Each pixel has a darkness from 0 (paper) to 1 (ink).
+//  - partial refresh: only the pixels that change move, in about 0.4 s. Pixels that go from black to white
+//    don't quite make it back to paper, so a faint grey ghost builds up with every partial refresh.
+//  - fast refresh (~1.5 s): the whole panel flashes inverted, black and white, then the new picture. Clears
+//    most of the ghosting.
+//  - full refresh (~2.6 s): several flashes. Clears all of it.
+// The device's real timings come from the simulator (power-up and SPI transfer first, then the waveform you see,
+// then power-down), measured on the first real board. The ghosting is milder than the first model: that board's
+// panel came out visibly cleaner than the simulator showed, though nobody has measured how much.
+const N = 800 * 480;
+const dark = new Float32Array(N), ghost = new Float32Array(N), ink = new Uint8Array(N);
+const LUT = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+  const a = i / 255, c = k => Math.round(PAPER[k] + (INK[k] - PAPER[k]) * a);
+  LUT[i] = (255 << 24) | (c(2) << 16) | (c(1) << 8) | c(0);
+}
+const px = new Uint32Array(img.data.buffer);
+function paint() {
+  for (let i = 0; i < N; i++) px[i] = LUT[(dark[i] * 255) | 0];
+  cx.putImageData(img, 0, 0);
+}
+function unpack(bytes, out) {
+  for (let i = 0, p = 0; i < 48000; i++) { const b = bytes[i]; for (let bit = 7; bit >= 0; bit--) out[p++] = (b >> bit) & 1; }
+}
+const GHOST_STEP = 0.025, GHOST_MAX = 0.14;   // was 0.045 and 0.25: the real panel ghosts less than that
+const PRE_MS = 300;                            // before the waveform starts: reset, power-up, the SPI transfer
+const ease = t => 1 - Math.pow(1 - t, 2.2);
+const sleepMs = ms => new Promise(r => setTimeout(r, ms));
+function frames(dur, fn) {            // calls fn(t) once per animation frame, t from 0 to 1
+  return new Promise(res => {
+    const t0 = performance.now();
+    const step = now => { const t = Math.min(1, (now - t0) / dur); fn(t); t < 1 ? requestAnimationFrame(step) : res(); };
+    requestAnimationFrame(step);
+  });
+}
+async function playRefresh(ev, next, instant) {
+  const from = dark.slice();
+  const target = new Float32Array(N);
+  const changed = [];
+  if (ev.mode === 'partial') {
+    for (let i = 0; i < N; i++) {
+      if (next[i] !== ink[i]) {
+        changed.push(i);
+        if (!next[i]) ghost[i] = Math.min(GHOST_MAX, ghost[i] + GHOST_STEP);   // black to white leaves a trace
+      }
+      target[i] = next[i] ? 1 : ghost[i];
+    }
+  } else {
+    const keep = ev.mode === 'fast' ? 0.08 : 0;
+    for (let i = 0; i < N; i++) {
+      if (next[i] !== ink[i]) changed.push(i);
+      ghost[i] *= keep;
+      target[i] = next[i] ? 1 : ghost[i];
+    }
+  }
+  if (showChanges) flashChanges(ev, changed, next);
+  ink.set(next);
+  if (instant) { dark.set(target); paint(); return; }
+  await sleepMs(PRE_MS);                                      // power-up and the SPI transfer
+  if (ev.mode === 'partial') {
+    await frames(ev.wave_ms, t => {
+      const e = ease(t);
+      for (const i of changed) dark[i] = from[i] + (target[i] - from[i]) * e;
+      paint();
+    });
+  } else {
+    // keyframes: what every pixel heads for, and when it gets there (fraction of the waveform)
+    const K = ev.mode === 'fast'
+      ? [[0.18, 'inv'], [0.40, 'black'], [0.62, 'white'], [1, 'new']]
+      : [[0.10, 'inv'], [0.24, 'black'], [0.38, 'white'], [0.52, 'black'], [0.66, 'white'], [0.82, 'invnew'], [1, 'new']];
+    const pics = { black: new Float32Array(N).fill(1), white: new Float32Array(N), new: target,
+                   inv: from.map(v => 1 - v), invnew: target.map(v => 1 - v) };
+    let k = 0, kStart = 0, base = from;
+    await frames(ev.wave_ms, t => {
+      while (k < K.length - 1 && t >= K[k][0]) {              // a keyframe reached: it becomes the new start point
+        base = pics[K[k][1]]; kStart = K[k][0]; k++;
+      }
+      const span = K[k][0] - kStart, e = ease(span > 0 ? Math.min(1, (t - kStart) / span) : 1), to = pics[K[k][1]];
+      for (let i = 0; i < N; i++) dark[i] = base[i] + (to[i] - base[i]) * e;
+      paint();
+    });
+  }
+  dark.set(target); paint();
+}
+
+// optional overlay: tint the pixels a refresh redraws, then fade it out
+const ov = document.getElementById('changes'), ox = ov.getContext('2d'), oimg = ox.createImageData(800, 480);
+const opx = new Uint32Array(oimg.data.buffer);
+let showChanges = false;
+try { showChanges = localStorage.getItem('rekasim.changes') === '1'; } catch (e) {}
+function toggleChanges() {
+  showChanges = !showChanges;
+  try { localStorage.setItem('rekasim.changes', showChanges ? '1' : '0'); } catch (e) {}
+  document.getElementById('showChanges').classList.toggle('on', showChanges);
+}
+document.getElementById('showChanges').classList.toggle('on', showChanges);
+function flashChanges(ev, changed, next) {
+  // green: ink drawn. orange: ink erased, which is what leaves ghosts behind on a partial refresh.
+  opx.fill(ev.mode === 'partial' ? 0 : 0x30c8c8c8);           // fast and full drive every pixel: a light wash over all of it
+  for (const i of changed) opx[i] = next[i] ? 0xc08fb986 : 0xd05ca8e0;   // ABGR
+  ox.putImageData(oimg, 0, 0);
+  ov.style.transition = 'none'; ov.style.opacity = 1;
+  setTimeout(() => { ov.style.transition = 'opacity 1.4s ease-in'; ov.style.opacity = 0; }, Math.max(700, ev.wave_ms));
+}
+
+// refreshes arrive in order and play one after another, so none get skipped
+const queue = [];
+let playing = false, queued = 0;
+async function player() {
+  if (playing) return;
+  playing = true;
+  while (queue.length) {
+    const { ev, frame } = queue.shift();
+    const next = new Uint8Array(N); unpack(await frame, next);
+    await playRefresh(ev, next, queue.length > 2 || document.hidden);   // far behind: catch up without animating
+    addRef(ev);
+  }
+  playing = false;
+}
+const recent = [];
+function addRef(ev) {
+  recent.unshift(ev); recent.length = Math.min(recent.length, 9);
+  document.getElementById('refs').innerHTML = recent.map(e =>
+    `<div class="${e.mode}"><span class="t">${(e.ms / 1000).toFixed(2)} s</span><span class="m">${e.mode}</span>` +
+    `<span class="w">${e.why || 'refresh'}, ${(100 * e.changed / N).toFixed(1)}% redrawn</span></div>`).join('');
+}
+
+// ---------------------------------------------------------------- state polling
+const fmt = ms => { ms = Math.max(0, ms); const m = Math.round(ms / 60000); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; };
+async function ctl(o) { S = await (await fetch('/api/control', {method: 'POST', body: JSON.stringify(o)})).json(); render(); }
+function render() {
+  document.getElementById('skipSetup').classList.toggle('on', S.skip_setup);
+  document.getElementById('router').classList.toggle('on', S.router);
+  document.getElementById('usb').classList.toggle('on', S.usb);
+  const b = document.getElementById('batt');
+  if (document.activeElement !== b) { b.value = Math.round(S.battery); battVal.textContent = Math.round(S.battery) + '%'; }
+  const d = document.getElementById('drift');
+  if (document.activeElement !== d) d.value = (S.drift * 100).toFixed(1);
+  state.textContent = S.asleep ? 'Deep sleep' : S.refreshing_ms > 0 ? 'Awake, refreshing the panel' : 'Awake';
+  stateSub.textContent = S.asleep ? (S.wake_in_ms >= 0 ? `Wakes on any key, or on its timer in ${fmt(S.wake_in_ms)}.` : 'Wakes on any key.')
+    : `Up ${fmt(S.uptime_ms)} since the last wake.`;
+  setup.hidden = !S.portal; apName.textContent = S.ap;
+  netHint.textContent = 'Pretend networks: ' + Object.entries(S.networks || {}).map(([n, p]) => p ? `${n} (password ${p})` : `${n} (open)`).join(', ');
+  chips.innerHTML = `<span>Wi-Fi <b>${S.wifi ? S.ssid : S.router ? 'off' : 'router down'}</b></span>
+    <span>Battery <b>${Math.round(S.battery)}%${S.usb ? (S.battery < 99.5 ? ', charging' : ', on USB') : ''}</b></span>
+`;
+  const w = S.wake || {};
+  panelSum.innerHTML = `Since this wake: <b>${w.refreshes || 0} refreshes</b>, <b>${((w.panel_ms || 0) / 1000).toFixed(1)} s</b> spent refreshing` +
+    ` (${w.partial || 0} partial, ${w.fast || 0} fast, ${w.full || 0} full). Ink erased by partial refreshes since the last clean: <b>${Math.round(100 * (S.ink_cleared || 0))}%</b>.`;
+}
+async function poll() {
+  try {
+    S = await (await fetch('/api/state')).json();
+    render();
+    if (S.seq < queued) seq = -1;                              // the simulator restarted
+    if (seq === -1) {                                          // first look: show what's on the panel now
+      const now = new Uint8Array(await (await fetch('/api/screen')).arrayBuffer());
+      unpack(now, ink); for (let i = 0; i < N; i++) dark[i] = ink[i];
+      paint(); seq = queued = S.seq;
+    } else if (S.seq > queued) {
+      const evs = await (await fetch('/api/refreshes?after=' + queued)).json();
+      for (const ev of evs) {
+        queue.push({ ev, frame: fetch('/api/frame?seq=' + ev.seq).then(r => r.arrayBuffer()).then(b => new Uint8Array(b)) });
+        queued = Math.max(queued, ev.seq);
+      }
+      if (!evs.length) queued = S.seq;
+      seq = S.seq;
+      player();
+    }
+    if (S.log_seq > logAfter) {
+      const lines = await (await fetch('/api/log?after=' + logAfter)).json();
+      const el = document.getElementById('log'), stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+      for (const l of lines) { const div = document.createElement('div'); div.textContent = l.t; el.appendChild(div); logAfter = l.n; }
+      while (el.childElementCount > 300) el.firstChild.remove();
+      if (stick) el.scrollTop = el.scrollHeight;
+    }
+  } catch (e) { state.textContent = 'Simulator not running'; }
+  setTimeout(poll, 100);
+}
+paint(); poll();
+</script>
+</body>
+</html>

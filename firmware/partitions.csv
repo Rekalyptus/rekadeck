@@ -1,0 +1,12 @@
+# 4 MB flash: two 1.44 MB app slots for over-the-air updates (one runs, the other takes the next version), 1 MB of
+# LittleFS for the card batches and the review log, and the crash dump.
+#
+# Changing this layout means flashing over USB once and losing the files in LittleFS (cards are downloaded again;
+# sync reviews first, they live there too). Wi-Fi, server and link stay: NVS doesn't move.
+# Name,    Type, SubType,  Offset,   Size
+nvs,       data, nvs,      0x9000,   0x5000
+otadata,   data, ota,      0xE000,   0x2000
+app0,      app,  ota_0,    0x10000,  0x170000
+app1,      app,  ota_1,    0x180000, 0x170000
+spiffs,    data, spiffs,   0x2F0000, 0x100000
+coredump,  data, coredump, 0x3F0000, 0x10000

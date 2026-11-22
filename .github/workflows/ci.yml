@@ -1,0 +1,140 @@
+name: CI
+
+# firmware    builds both PlatformIO envs for the ESP32-S3, and checks the image links our own inflater rather than
+#             the ESP32-S3 ROM's older one (docs/DEVELOPING.md, "Things that bit us on real hardware")
+# core        unit tests for the device code against an in-memory board (tests/core)
+# scenarios   end-to-end tests: the simulator running the device code, syncing with the mock server (tests/sim)
+# installers  flash.sh and flash.bat on Linux, macOS and Windows: firmware checksums, esptool download and run
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio==6.2.0
+
+      - name: Build the dev and release firmware
+        run: pio run -d firmware -e rekadeck -e release
+
+      - name: Our inflater, not the ROM's
+        run: |
+          NM=$(find ~/.platformio/packages/toolchain-xtensa-esp32s3 -name 'xtensa-esp32s3-elf-nm' | head -1)
+          for env in rekadeck release; do
+            "$NM" firmware/.pio/build/$env/firmware.elf | grep -E ' T reka_tinfl_decompress$'
+          done
+
+      - name: No build machine paths in the image
+        run: |
+          if strings firmware/.pio/build/release/firmware.bin | grep -F "$HOME"; then
+            echo "the image contains paths from the build machine"; exit 1
+          fi
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S tests/core -B tests/core/build
+          cmake --build tests/core/build -j
+
+      - name: Test
+        run: ctest --test-dir tests/core/build --output-on-failure
+
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build the simulator
+        run: |
+          cmake -S sim -B sim/build
+          cmake --build sim/build -j
+
+      - name: Install the mock server and pytest
+        run: pip install -r server/requirements.txt pytest
+
+      - name: Run the scenarios
+        run: pytest tests/sim -q
+
+  installers:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck
+        if: runner.os == 'Linux'
+        run: shellcheck flash.sh
+
+      - name: flash.sh --check
+        if: runner.os != 'Windows'
+        run: ./flash.sh --check
+
+      - name: flash.sh rejects an unknown option
+        if: runner.os != 'Windows'
+        run: |
+          if ./flash.sh --bogus; then exit 1; fi
+
+      - name: flash.bat --check
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: flash.bat --check
+
+      - name: flash.bat rejects an unknown option
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & .\flash.bat --bogus
+          if ($LASTEXITCODE -ne 1) { Write-Host "expected exit code 1, got $LASTEXITCODE"; exit 1 }
+          exit 0
+
+      # no board here: this runs the whole path up to the board search, then the "isn't there" message
+      - name: flash.sh with a port that isn't there
+        if: runner.os != 'Windows'
+        run: |
+          ./flash.sh --port /dev/no-such-port > out.txt 2>&1 && exit 1
+          cat out.txt
+          grep -q "isn't there" out.txt
+
+      - name: flash.bat with a port that isn't there
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = & .\flash.bat --port COM99 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 1 -or $out -notmatch "isn't there") { exit 1 }
+          exit 0
